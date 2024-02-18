@@ -1,5 +1,7 @@
 #!/usr/bin/python
-import RPi.GPIO as GPIO
+# import RPi.GPIO as GPIO
+import gpiod
+from gpiod.line import Direction, Value
 import math
 
 class MAX31855(object):
@@ -9,7 +11,7 @@ class MAX31855(object):
      - A [Raspberry Pi](http://www.raspberrypi.org/)
 
     '''
-    def __init__(self, cs_pin, clock_pin, data_pin, units = "c", board = GPIO.BCM):
+    def __init__(self, cs_pin, clock_pin, data_pin, units = "c", board = None):
         '''Initialize Soft (Bitbang) SPI bus
 
         Parameters:
@@ -29,41 +31,61 @@ class MAX31855(object):
         self.noConnection = self.shortToGround = self.shortToVCC = self.unknownError = False
 
         # Initialize needed GPIO
-        GPIO.setmode(self.board)
-        GPIO.setup(self.cs_pin, GPIO.OUT)
-        GPIO.setup(self.clock_pin, GPIO.OUT)
-        GPIO.setup(self.data_pin, GPIO.IN)
-
-        # Pull chip select high to make chip inactive
-        GPIO.output(self.cs_pin, GPIO.HIGH)
+        # GPIO.setmode(self.board)
+        self.chip = gpiod.Chip("/dev/gpiochip4")
+        self.lines = self.chip.request_lines({
+            self.cs_pin: gpiod.LineSettings(
+                direction=Direction.OUTPUT,
+                output_value=Value.ACTIVE,
+            ),
+            self.clock_pin: gpiod.LineSettings(
+                direction=Direction.OUTPUT,
+                output_value=Value.ACTIVE
+            ),
+            self.data_pin: gpiod.LineSettings(
+                direction=Direction.INPUT,
+            )
+            }
+        )
 
     def get(self):
         '''Reads SPI bus and returns current value of thermocouple.'''
         self.read()
         self.checkErrors()
+        print("Get Data", self.data)
         #return getattr(self, "to_" + self.units)(self.data_to_tc_temperature())
         return getattr(self, "to_" + self.units)(self.data_to_LinearizedTempC())
 
     def get_rj(self):
         '''Reads SPI bus and returns current value of reference junction.'''
         self.read()
+        print("Get rj Data", self.data)
         return getattr(self, "to_" + self.units)(self.data_to_rj_temperature())
 
     def read(self):
         '''Reads 32 bits of the SPI bus & stores as an integer in self.data.'''
         bytesin = 0
         # Select the chip
-        GPIO.output(self.cs_pin, GPIO.LOW)
+        self.lines.set_value(self.cs_pin, Value.INACTIVE)
+        # GPIO.output(self.cs_pin, GPIO.LOW)
         # Read in 32 bits
         for i in range(32):
-            GPIO.output(self.clock_pin, GPIO.LOW)
+            # GPIO.output(self.clock_pin, GPIO.LOW)
+            self.lines.set_value(self.clock_pin, Value.INACTIVE)
             bytesin = bytesin << 1
-            if (GPIO.input(self.data_pin)):
+            curr_value = self.lines.get_value(self.data_pin)
+            if curr_value == Value.ACTIVE:
                 bytesin = bytesin | 1
-            GPIO.output(self.clock_pin, GPIO.HIGH)
+            # if (GPIO.input(self.data_pin)):
+            # GPIO.output(self.clock_pin, GPIO.HIGH)
+
+            self.lines.set_value(self.clock_pin, Value.ACTIVE)
         # Unselect the chip
-        GPIO.output(self.cs_pin, GPIO.HIGH)
+        # GPIO.output(self.cs_pin, GPIO.HIGH)
+        self.lines.set_value(self.cs_pin, Value.ACTIVE)
         # Save data
+        print(f"{bytesin:b}, {len(f'{bytesin:b}')}")
+
         self.data = bytesin
 
     def checkErrors(self, data_32 = None):
@@ -76,6 +98,7 @@ class MAX31855(object):
             self.shortToGround = (data_32 & 0x00000002) != 0      # SCG bit, D1
             self.shortToVCC = (data_32 & 0x00000004) != 0         # SCV bit, D2
             self.unknownError = not (self.noConnection | self.shortToGround | self.shortToVCC)    # Errk!
+            print(f"Error: No Connection {self.noConnection}, Short To Ground {self.shortToGround}, Short to vcc {self.shortToVCC}, Unknown {self.unknownError}")
         else:
             self.noConnection = self.shortToGround = self.shortToVCC = self.unknownError = False
 
@@ -128,8 +151,9 @@ class MAX31855(object):
 
     def cleanup(self):
         '''Selective GPIO cleanup'''
-        GPIO.setup(self.cs_pin, GPIO.IN)
-        GPIO.setup(self.clock_pin, GPIO.IN)
+        self.chip.close()
+        # GPIO.setup(self.cs_pin, GPIO.IN)
+        # GPIO.setup(self.clock_pin, GPIO.IN)
 
     def data_to_LinearizedTempC(self, data_32 = None):
         '''Return the NIST-linearized thermocouple temperature value in degrees
@@ -240,10 +264,10 @@ if __name__ == "__main__":
 
     # Multi-chip example
     import time
-    cs_pins = [4, 17, 18, 24]
-    clock_pin = 23
-    data_pin = 22
-    units = "f"
+    cs_pins = [27]
+    clock_pin = 22
+    data_pin = 17
+    units = "c"
     thermocouples = []
     for cs_pin in cs_pins:
         thermocouples.append(MAX31855(cs_pin, clock_pin, data_pin, units))

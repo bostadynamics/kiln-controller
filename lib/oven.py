@@ -6,6 +6,9 @@ import logging
 import json
 import config
 import os
+import gpiod
+from gpiod.line import Direction, Value
+
 
 log = logging.getLogger(__name__)
 
@@ -30,30 +33,33 @@ duplog = Duplogger().logref()
 
 
 class Output(object):
-    def __init__(self):
+    def __init__(self, heat_pin=config.gpio_heat, init_value=Value.ACTIVE):
         self.active = False
-        self.load_libs()
-
-    def load_libs(self):
+        self.heat_pin = heat_pin
         try:
-            import RPi.GPIO as GPIO
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setwarnings(False)
-            GPIO.setup(config.gpio_heat, GPIO.OUT)
+            self.chip = gpiod.Chip("/dev/gpiochip4")
+            self.lines = self.chip.request_lines({
+                self.heat_pin: gpiod.LineSettings(
+                    direction=Direction.OUTPUT,
+                    output_value=init_value,
+                )
+                }
+            )
             self.active = True
-            self.GPIO = GPIO
         except:
             msg = "Could not initialize GPIOs, oven operation will only be simulated!"
             log.warning(msg)
             self.active = False
 
-    def heat(self,sleepfor):
-        self.GPIO.output(config.gpio_heat, self.GPIO.HIGH)
+    def heat(self, sleepfor=0):
+        self.lines.set_value(self.heat_pin, Value.INACTIVE)
+        # self.GPIO.output(config.gpio_heat, self.GPIO.HIGH)
         time.sleep(sleepfor)
 
-    def cool(self,sleepfor):
+    def cool(self, sleepfor=0):
         '''no active cooling, so sleep'''
-        self.GPIO.output(config.gpio_heat, self.GPIO.LOW)
+        self.lines.set_value(self.heat_pin, Value.ACTIVE)
+        # self.GPIO.output(config.gpio_heat, self.GPIO.LOW)
         time.sleep(sleepfor)
 
 # FIX - Board class needs to be completely removed
