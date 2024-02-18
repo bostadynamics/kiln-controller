@@ -22,9 +22,9 @@ listening_port = 8081
 # to produce the actual cost during a run. My kiln has three
 # elements that when my switches are set to high, consume 9460 watts.
 
-kwh_rate        = 0.1319  # cost per kilowatt hour per currency_type to calculate cost to run job
-kw_elements     = 9.460 # if the kiln elements are on, the wattage in kilowatts
-currency_type   = "$"   # Currency Symbol to show when calculating cost to run job
+kwh_rate        = 8.0  # cost per kilowatt hour per currency_type to calculate cost to run job
+kw_elements     = 16.5 # if the kiln elements are on, the wattage in kilowatts
+currency_type   = "₹"   # Currency Symbol to show when calculating cost to run job
 
 ########################################################################
 #
@@ -105,7 +105,7 @@ sim_R_ho_air   = 0.05   # K/W  " with internal air circulation
 # If you change the temp_scale, all settings in this file are assumed to
 # be in that scale.
 
-temp_scale          = "f" # c = Celsius | f = Fahrenheit - Unit to display
+temp_scale          = "c" # c = Celsius | f = Fahrenheit - Unit to display
 time_scale_slope    = "h" # s = Seconds | m = Minutes | h = Hours - Slope displayed in temp_scale per time_scale_slope
 time_scale_profile  = "m" # s = Seconds | m = Minutes | h = Hours - Enter and view target time in time_scale_profile
 
